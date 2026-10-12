@@ -6,6 +6,16 @@ the focus.
 
 ![The keyboard with the German layout](screenshots/de.png)
 
+It is meant for movie nights: the few characters you need now and then, for a search in
+the browser or the name of a film, without getting up for the real keyboard. It is not a
+replacement for one.
+
+> [!WARNING]
+> To react to a mouse button, the keyboard needs read access to all input devices (the
+> group `input`). With that, **every program running under your account can read what is
+> typed on the keyboard, passwords included.** See
+> [A note on security](#a-note-on-security) before you set it up.
+
 ## Why this exists
 
 My PC is connected to a projector, and I use it from the couch with nothing but a
@@ -35,6 +45,11 @@ wayland-osk gets around this with two decisions:
 
 And it is shown and hidden with a **mouse button**, because the mouse is the only thing
 in my hand.
+
+I only need it while the projector is on, so on my machine the listener for the mouse
+button is started when the projector comes on and stopped when it goes off. I recommend
+setting it up that way, see
+[Running it only when you need it](#running-it-only-when-you-need-it).
 
 ## What it looks like
 
@@ -95,6 +110,35 @@ systemctl --user enable --now wayland-osk-listener.service
 
 The unit expects the repository in `~/wayland-osk`. Change the path in `ExecStart` if you
 put it somewhere else.
+
+## Running it only when you need it
+
+Recommended. At the desk the mouse button is just a mouse button, and there is no reason
+for something to listen to it all day. Let a script start the listener when the situation
+you need it for begins, for example when the projector is switched on, and stop it
+afterwards.
+
+`examples/listener-while-display.sh` does that for a display output:
+
+```
+examples/listener-while-display.sh              # lists the outputs of your machine
+examples/listener-while-display.sh HDMI-A-1     # listen while HDMI-A-1 is on
+examples/listener-while-display.sh DP-1 off     # listen while DP-1 is off
+```
+
+The second form is for a projector on its own output. The third is for a setup like
+mine, where movie mode means that the desk monitor is switched off and only the projector
+remains. When the condition ends, the script stops the listener and closes the keyboard
+if it is still open.
+
+Start this script with your session instead of the listener: in
+`systemd/wayland-osk-listener.service`, replace the `ExecStart` line with the call you
+want. If you already have a script that runs when your projector, TV or receiver comes
+on, starting and stopping `wayland-osk-listener` from there works just as well.
+
+This keeps the mouse button free the rest of the time. It does not change the
+permissions described in the security note: those come from the group membership, not
+from the listener running.
 
 ## Configuration
 
@@ -167,13 +211,22 @@ button you can bind it to a keyboard shortcut or a launcher in your desktop's se
 
 Both parts need powerful permissions, and that is inherent to how they work:
 
-- Reading mouse buttons means reading input devices. A user in the group `input` can read
-  every key that is pressed on the machine.
-- `ydotoold` can inject any key press, and every program running as your user can ask it
-  to.
+- **Reading.** To notice the mouse button, the listener reads input devices, which needs
+  membership in the group `input`. That permission belongs to your user, not to this
+  program: once you are in the group, every program running under your account can read
+  all input devices, and that includes every key pressed on the real keyboard. A
+  malicious program could record your passwords.
+- **Writing.** `ydotoold` can inject any key press, and every program running as your
+  user can ask it to.
 
 That is the same trade-off as with any tool built on evdev and uinput. Do not set this up
-on a machine where you do not trust the software running under your account.
+on a machine where you do not trust the software running under your account, and not on
+a machine other people use.
+
+If you only want the keyboard and can live without the mouse button, you do not need the
+group `input` for the listener: bind `wayland-osk-toggle` to a keyboard shortcut or a
+launcher instead (see [Other ways to open it](#other-ways-to-open-it)). `ydotoold` still
+needs its access to `/dev/uinput`.
 
 ## License
 
