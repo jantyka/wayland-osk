@@ -1,0 +1,23 @@
+#!/bin/bash
+# Shows the keyboard, or closes it if it is already open.
+#
+# This is what the mouse button calls (see wayland-osk-listener). It can also be bound to
+# a keyboard shortcut or a panel launcher. Arguments are passed on to wayland-osk.
+set -u
+
+here="$(dirname "$(readlink -f "$0")")"
+pidfile="${XDG_RUNTIME_DIR:-/tmp}/wayland-osk.pid"
+
+if [ -f "$pidfile" ]; then
+	pid="$(cat "$pidfile")"
+	# Only kill it if that process really is the keyboard: the pid may have been reused.
+	if [ -n "$pid" ] && grep -qs "wayland-osk" "/proc/$pid/cmdline"; then
+		kill "$pid"
+		rm -f "$pidfile"
+		exit 0
+	fi
+	rm -f "$pidfile"
+fi
+
+"$here/wayland-osk" "$@" &
+echo $! > "$pidfile"

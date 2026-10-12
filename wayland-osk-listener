@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""wayland-osk-listener: shows and hides the keyboard with a mouse button.
+
+Watches the mice for one button and runs wayland-osk-toggle when it is pressed. The
+button keeps its normal function, the devices are not grabbed.
+
+Which button, and optionally which device, is set in ~/.config/wayland-osk/config.ini.
+Reading input devices needs permission: on most distributions membership in the group
+"input".
+"""
+import argparse
+import os
+import selectors
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import oskconfig
+
+import evdev
+from evdev import ecodes
+
+TOGGLE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'wayland-osk-toggle')
+RESCAN_SECONDS = 5
+
+
+def button_code(name):
+    """Turns a name like BTN_MIDDLE, or a plain number, into a key code."""
+    name = name.strip()
+    if name.isdigit():
+        return int(name)
+    code = getattr(ecodes, name.upper(), None)
+    if not isinstance(code, int):
+        sys.exit(f"wayland-osk-listener: unknown button '{name}'. "
+                 "Run 'wayland-osk-listener --detect' and press the button to see its name.")
+    return code
+
+
+def button_names(code):
+    names = ecodes.BTN.get(code) or ecodes.KEY.get(code) or str(code)
+    return '/'.join(names) if isinstance(names, (list, tuple)) else names
+
+
+def pointer_devices(name_part=''):
+    """All readable mice, filtered by name."""
+    devices = []
+    for path in evdev.list_devices():
+        try:
+            device = evdev.InputDevice(path)
+        except OSError:
+            continue
+        capabilities = device.capabilities()
+        # A left button and relative movement: a mouse or trackball. Leaves out keyboards
+        # that also report a wheel. The virtual device of ydotool is not a real mouse.
+        is_mouse = (ecodes.EV_REL in capabilities
+                    and ecodes.BTN_LEFT in capabilities.get(ecodes.EV_KEY, [])
+                    and 'ydotool' not in device.name.lower())
+        if is_mouse and name_part.lower() in device.name.lower():
+            devices.append(device)
+        else:
+            device.close()
+    return devices
+
+
+def list_devices():
+    devices = pointer_devices()
+    if not devices:
+        print('No pointer devices found. Are you allowed to read /dev/input/event*?')
+    for device in devices:
+        buttons = [button_names(code) for code in device.capabilities()[ecodes.EV_KEY]
+                   if code in ecodes.BTN]
+        print(f'{device.name}\n    {device.path}\n    buttons: {", ".join(buttons)}')
+
+
+def watch(devices, on_press):
+    """Calls on_press(device, code) for every button press until a device goes away."""
+    selector = selectors.DefaultSelector()
+    for device in devices:
+        selector.register(device, selectors.EVENT_READ)
+    try:
+        while True:
+            for key, _ in selector.select():
+                for event in key.fileobj.read():
+                    if event.type == ecodes.EV_KEY and event.value == 1:
+                        on_press(key.fileobj, event.code)
+    except OSError:
+        # A device was unplugged or went to sleep. The caller looks for devices again.
+        pass
+    finally:
+        selector.close()
+        for device in devices:
+            device.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    parser.add_argument('--list', action='store_true',
+                        help='list the pointer devices and their buttons, then exit')
+    parser.add_argument('--detect', action='store_true',
+                        help='print the name of every button you press, to find the one you want')
+    args = parser.parse_args()
+
+    if args.list:
+        list_devices()
+        return
+
+    settings = oskconfig.load()['trigger']
+    name_part = '' if args.detect else settings['device'].strip()
+    button = None if args.detect else button_code(settings['button'])
+
+    def on_press(device, code):
+        if args.detect:
+            print(f'{button_names(code)}  ({device.name})', flush=True)
+        elif code == button:
+            subprocess.Popen([TOGGLE])
+
+    if args.detect:
+        print('Press mouse buttons to see their names. Ctrl+C to stop.', flush=True)
+
+    announced = None
+    while True:
+        devices = pointer_devices(name_part)
+        if devices:
+            names = sorted(device.name for device in devices)
+            if names != announced and not args.detect:
+                print(f'wayland-osk-listener: {button_names(button)} on {", ".join(names)}',
+                      flush=True)
+                announced = names
+            watch(devices, on_press)
+        elif announced != []:
+            where = f" matching '{name_part}'" if name_part else ''
+            print(f'wayland-osk-listener: no pointer device{where} found, waiting', flush=True)
+            announced = []
+        time.sleep(RESCAN_SECONDS)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

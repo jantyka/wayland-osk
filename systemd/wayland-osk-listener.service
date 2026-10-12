@@ -1,0 +1,18 @@
+# systemd user unit for the mouse button listener.
+#
+#   cp systemd/wayland-osk-listener.service ~/.config/systemd/user/
+#   (adjust the path in ExecStart)
+#   systemctl --user enable --now wayland-osk-listener.service
+
+[Unit]
+Description=wayland-osk: show the on-screen keyboard with a mouse button
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/wayland-osk/wayland-osk-listener
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target
