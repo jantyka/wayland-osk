@@ -207,6 +207,8 @@ button you can bind it to a keyboard shortcut or a launcher in your desktop's se
 - It needs XWayland. On a session without it, the window does not appear.
 - Only German and US layouts are included.
 
+If you miss a feature, feel free to fork.
+
 ## A note on security
 
 Both parts need powerful permissions, and that is inherent to how they work:
