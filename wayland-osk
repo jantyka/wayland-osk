@@ -92,17 +92,35 @@ ROWS = {
     ],
 }
 
-CSS = b"""
-window { background: #232629; }
-button {
+COLORS = ('background', 'key', 'text', 'border', 'hover', 'hover_text', 'active',
+          'active_text')
+
+CSS = """
+window {{ background: {background}; }}
+button {{
     min-width: 36px; min-height: 38px;
-    font-size: 13px; font-weight: bold; padding: 2px 4px;
-    background: #31363b; color: #eff0f1;
-    border: 1px solid #4d4d4d; border-radius: 4px;
-}
-button:hover { background: #3daee9; color: white; }
-button.on { background: #1d99f3; color: white; }
+    {font_family}font-size: {font_size}px; font-weight: bold; padding: 2px 4px;
+    background: {key}; color: {text};
+    border: 1px solid {border}; border-radius: 4px;
+}}
+button:hover {{ background: {hover}; color: {hover_text}; }}
+button.on {{ background: {active}; color: {active_text}; }}
 """
+
+
+def build_css(style):
+    """The stylesheet for the [style] section of the config file. Exits on a bad value."""
+    def fail(key, problem):
+        sys.exit(f"wayland-osk: {key} = '{style[key]}' in {oskconfig.config_path()}: {problem}")
+
+    for key in COLORS:
+        if not Gdk.RGBA().parse(style[key]):
+            fail(key, 'not a colour, expected a code like #31363b')
+    if not style['font_size'].isdigit() or int(style['font_size']) == 0:
+        fail('font_size', 'expected a size in pixels, like 13')
+    font = style['font'].replace('\\', '\\\\').replace('"', '\\"')
+    font_family = f'font-family: "{font}"; ' if font else ''
+    return CSS.format(font_family=font_family, **style).encode()
 
 
 def key_sequence(code, shift=False, altgr=False):
@@ -124,7 +142,7 @@ def send_key(code, shift=False, altgr=False):
 
 
 class Keyboard(Gtk.Window):
-    def __init__(self, layout):
+    def __init__(self, layout, css):
         super().__init__(title='wayland-osk')
         self.labels = LABELS[layout]
         self.shift = False
@@ -144,7 +162,7 @@ class Keyboard(Gtk.Window):
         self.connect('map-event', self.on_map)
 
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS)
+        provider.load_from_data(css)
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
@@ -210,12 +228,13 @@ def main():
                         help='keyboard layout of the system (default: from the config file, else de)')
     args = parser.parse_args()
 
-    layout = args.layout or oskconfig.load()['keyboard']['layout'].strip().lower()
+    config = oskconfig.load()
+    layout = args.layout or config['keyboard']['layout'].lower()
     if layout not in LABELS:
         sys.exit(f"wayland-osk: unknown layout '{layout}' in {oskconfig.config_path()} "
                  f"(available: {', '.join(sorted(LABELS))})")
 
-    window = Keyboard(layout)
+    window = Keyboard(layout, build_css(config['style']))
     window.show_all()
     Gtk.main()
 

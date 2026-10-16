@@ -142,8 +142,8 @@ from the listener running.
 
 ## Configuration
 
-Optional. Without a configuration file you get the German layout and the middle mouse
-button.
+Optional. Without a configuration file you get the German layout, the middle mouse
+button and the colours shown above.
 
 ```
 mkdir -p ~/.config/wayland-osk
@@ -157,7 +157,15 @@ layout = de          # de = German QWERTZ, us = US QWERTY
 [trigger]
 button = BTN_MIDDLE  # the mouse button that shows and hides the keyboard
 device =             # optional: only mice whose name contains this text
+
+[style]
+font =               # font name, empty = the font of your desktop
+font_size = 13       # in pixels
+background = #232629 # colours, see below
 ```
+
+A comment after a value starts with `# `, with a space, because `#` also starts a colour
+code.
 
 **Finding the name of a mouse button:**
 
@@ -175,6 +183,41 @@ or opens a link in a new tab; a thumb button is often the better choice.
 After changing the configuration, restart the listener
 (`systemctl --user restart wayland-osk-listener.service`). The keyboard reads it every
 time it is shown.
+
+### Colours and font
+
+![The keyboard with five different colour schemes and fonts](screenshots/styles.gif)
+
+The `[style]` section sets the font and every colour of the keyboard:
+
+```ini
+[style]
+font = DejaVu Sans Mono  # family name as "fc-list : family" shows it
+font_size = 13           # size of the key labels in pixels
+
+background = #232629     # behind the keys
+key = #31363b            # key
+text = #eff0f1           # key label
+border = #4d4d4d         # frame around each key
+hover = #3daee9          # key under the mouse pointer
+hover_text = #ffffff     # its label
+active = #1d99f3         # Shift or AltGr while switched on
+active_text = #ffffff    # its label
+```
+
+Colours are codes like `#31363b` (`#rgb` and CSS colour names such as `white` work too).
+Settings you leave out keep their default, so changing a single colour is enough. A font
+that is not installed falls back to the desktop font; an invalid colour or size stops the
+keyboard with a message that names the setting.
+
+The schemes in the animation, to copy from:
+
+| Scheme | font | background | key | text | border | hover | hover_text | active | active_text |
+|---|---|---|---|---|---|---|---|---|---|
+| Light | Adwaita Sans | `#deddda` | `#ffffff` | `#241f31` | `#c0bfbc` | `#3584e4` | `#ffffff` | `#1c71d8` | `#ffffff` |
+| Terminal | DejaVu Sans Mono | `#050a05` | `#0c160c` | `#33ff66` | `#1f5f2f` | `#33ff66` | `#050a05` | `#1fa84a` | `#050a05` |
+| Dracula | DejaVu Serif | `#21222c` | `#44475a` | `#f8f8f2` | `#6272a4` | `#ff79c6` | `#21222c` | `#bd93f9` | `#21222c` |
+| Amber | Nimbus Mono PS, size 15 | `#140d04` | `#2b1d0e` | `#ffb000` | `#5a3d12` | `#ffb000` | `#140d04` | `#cc8400` | `#140d04` |
 
 ## Layouts
 
